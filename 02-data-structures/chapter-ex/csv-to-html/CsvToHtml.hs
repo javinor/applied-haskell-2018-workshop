@@ -10,6 +10,7 @@ import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as TE
 import qualified Data.Map.Strict         as M
 
+import Data.List   (foldl')
 import Data.Monoid ((<>))
 import System.IO   (IOMode( ReadMode, WriteMode ), withBinaryFile )
 
@@ -40,7 +41,7 @@ mergeDemographics :: [ DemographicDict ] -> DemographicDict
 mergeDemographics stateDemos = 
   let mergeCityDemographics = M.unionWith (+)
       mergeStateDemographics = M.unionWith mergeCityDemographics
-  in  foldr mergeStateDemographics M.empty $ stateDemos
+  in  foldl' mergeStateDemographics M.empty $ stateDemos
 
 
 pad0 = "\n"
@@ -56,7 +57,7 @@ showDemographics m =
 
 showStateDemographics :: State -> M.Map City Int -> BB.Builder
 showStateDemographics state cityMap= 
-    pad2 <> "<li>" <> (BB.byteString . TE.encodeUtf8) state <>
+    pad2 <> "<li>" <> TE.encodeUtf8Builder state <>
     pad4 <> "<dl>" 
          <> showCityDemographics cityMap <>
     pad4 <> "</dl>" <>
@@ -66,14 +67,8 @@ showCityDemographics :: M.Map City Int -> BB.Builder
 showCityDemographics = 
   M.foldMapWithKey
   (\city count -> 
-    pad6 <> showCity city <> 
-    pad6 <> showCount count)
-
-showCity :: City -> BB.Builder
-showCity city = "<dt>" <> BB.byteString (TE.encodeUtf8 city) <> "</dt>"
-
-showCount :: Int -> BB.Builder
-showCount count = "<dd>" <> BB.intDec count <> "</dd>"
+    pad6 <> "<dt>" <> TE.encodeUtf8Builder city <> "</dt>" <> 
+    pad6 <> "<dd>" <> BB.intDec count <> "</dd>")
 
 
 pipeFileWith :: FilePath -> FilePath -> (B.ByteString -> BB.Builder) -> IO ()
