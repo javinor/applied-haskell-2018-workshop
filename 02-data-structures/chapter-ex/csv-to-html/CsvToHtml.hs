@@ -2,6 +2,7 @@
 -- stack --resolver lts-11.11 script
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 import qualified Data.ByteString         as B
 import qualified Data.ByteString.Builder as BB
@@ -25,10 +26,12 @@ type DemographicDict = M.Map State (M.Map City Int)
 toCsvLines :: B.ByteString -> [T.Text]
 toCsvLines = (T.splitOn "\n") . TE.decodeUtf8
 
-toPerson :: T.Text -> Person
-toPerson row = 
-  let name' : city' : state' : [] = T.splitOn "," row
-  in  Person {name=name', city=city', state=state'}
+toPerson :: T.Text -> Maybe Person
+toPerson line = do
+  let raw = fmap T.strip $ T.split (== ',') line
+  case raw of
+    (name:city:state:_) -> Just Person{..}
+    _ -> Nothing
 
 toDemographic :: Person -> DemographicDict
 toDemographic p = M.singleton (state p) (M.singleton (city p) 1)
@@ -79,12 +82,15 @@ pipeFileWith src dest pipe =
     withBinaryFile dest WriteMode $ \t ->
       B.hGetContents f >>= BB.hPutBuilder t . pipe
 
+csvToHtml :: B.ByteString -> BB.Builder
+csvToHtml bs = do 
+  let ps = traverse toPerson $ toCsvLines bs
+  case ps of
+    Just ps -> showDemographics . mergeDemographics . (fmap toDemographic) $ ps
+    Nothing -> mempty
+
 main :: IO ()
-main = 
-  pipeFileWith 
-    "input.csv" 
-    "output.html" 
-    (showDemographics . mergeDemographics . (fmap toDemographic) . (fmap toPerson) . toCsvLines)
+main = pipeFileWith "input.csv" "output.html" csvToHtml
 
 
 -- Dev Debugging
